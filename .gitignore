@@ -1,1 +1,4 @@
 .venv
+__pycache__
+annotations
+cat_dog_images
