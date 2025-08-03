@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 
 def create_yolo_targets(targets, anchors, grid_size=14, image_size=224, num_classes=2):
@@ -137,3 +138,76 @@ def decode_yolo_predictions(predictions, anchors, grid_size=14, image_size=224, 
         })
 
     return results
+
+
+def yolo_loss(predictions, targets, coord_weight=3.0, noobj_weight=0.5):
+    batch_size = predictions.shape[0]
+    device = predictions.device
+
+    pred_xy = predictions[:, :, 0:2]
+    pred_wh = predictions[:, :, 2:4]
+    pred_obj = predictions[:, :, 4:5]
+    pred_cls = predictions[:, :, 5:]
+
+    target_xy = targets[:, :, 0:2]
+    target_wh = targets[:, :, 2:4]
+    target_obj = targets[:, :, 4:5]
+    target_cls = targets[:, :, 5:]
+
+    obj_mask = target_obj > 0
+    noobj_mask = ~obj_mask
+    obj_mask_expanded = obj_mask.expand_as(pred_xy)
+
+    if obj_mask.sum() > 0:
+        xy_loss = F.mse_loss(
+            pred_xy[obj_mask_expanded],
+            target_xy[obj_mask_expanded],
+            reduction='sum'
+        )
+
+        wh_loss = F.mse_loss(
+            pred_wh[obj_mask_expanded],
+            target_wh[obj_mask_expanded],
+            reduction='sum'
+        )
+    else:
+        xy_loss = torch.tensor(0.0, device=device)
+        wh_loss = torch.tensor(0.0, device=device)
+
+    obj_loss = F.binary_cross_entropy_with_logits(
+        pred_obj[obj_mask],
+        target_obj[obj_mask],
+        reduction='sum'
+    ) if obj_mask.sum() > 0 else torch.tensor(0.0, device=device)
+
+    noobj_loss = F.binary_cross_entropy_with_logits(
+        pred_obj[noobj_mask],
+        target_obj[noobj_mask],
+        reduction='sum'
+    ) if noobj_mask.sum() > 0 else torch.tensor(0.0, device=device)
+
+    if obj_mask.sum() > 0:
+        obj_mask_cls = obj_mask.expand_as(pred_cls)
+        cls_loss = F.binary_cross_entropy_with_logits(
+            pred_cls[obj_mask_cls],
+            target_cls[obj_mask_cls],
+            reduction='sum'
+        )
+    else:
+        cls_loss = torch.tensor(0.0, device=device)
+
+    total_loss = (
+        coord_weight * (xy_loss + wh_loss) +
+        obj_loss +
+        noobj_weight * noobj_loss +
+        cls_loss
+    ) / batch_size
+
+    return {
+        'total_loss': total_loss,
+        'xy_loss': xy_loss / batch_size,
+        'wh_loss': wh_loss / batch_size,
+        'obj_loss': obj_loss / batch_size,
+        'noobj_loss': noobj_loss / batch_size,
+        'cls_loss': cls_loss / batch_size
+    }
