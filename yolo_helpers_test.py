@@ -33,8 +33,6 @@ def test_encode_decode_roundtrip():
     decoded = decode_yolo_predictions(
         predictions, anchors=anchors, grid_size=14, image_size=224, conf_threshold=0.7)
 
-    print(f"Original: {original_targets[0]['boxes'][0]}")
-    print(f"Decoded: {decoded[0]['boxes'][0]}")
     assert len(decoded[0]['boxes']) > 0
 
     original_box = original_targets[0]['boxes'][0]
@@ -108,3 +106,4 @@ if __name__ == "__main__":
     test_empty_targets()
     test_encode_decode_roundtrip()
     test_multiple_objects_multiple_batches()
+    print("All tests passed!!!")
