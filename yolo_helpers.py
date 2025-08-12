@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from PIL import Image, ImageDraw
 
 
 def create_yolo_targets(targets, anchors, grid_size=14, image_size=224, num_classes=2):
@@ -40,8 +41,8 @@ def create_yolo_targets(targets, anchors, grid_size=14, image_size=224, num_clas
 
             rel_w = width * grid_scale
             rel_h = height * grid_scale
-
             box_wh = torch.tensor([rel_w, rel_h])
+
             ious = []
             for anchor in anchors:
                 anchor_tensor = torch.tensor(anchor) if not isinstance(
@@ -58,14 +59,15 @@ def create_yolo_targets(targets, anchors, grid_size=14, image_size=224, num_clas
             anchor_w = anchors[best_anchor][0] * grid_scale
             anchor_h = anchors[best_anchor][1] * grid_scale
 
-            yolo_targets[batch_idx, best_anchor, 0, cell_y, cell_x] = torch.logit(
-                torch.clamp(rel_x, 1e-6, 1-1e-6))
-            yolo_targets[batch_idx, best_anchor, 1, cell_y, cell_x] = torch.logit(
-                torch.clamp(rel_y, 1e-6, 1-1e-6))
-            yolo_targets[batch_idx, best_anchor, 2,
-                         cell_y, cell_x] = torch.log(rel_w / anchor_w + 1e-6)
-            yolo_targets[batch_idx, best_anchor, 3,
-                         cell_y, cell_x] = torch.log(rel_h / anchor_h + 1e-6)
+            yolo_targets[batch_idx, best_anchor, 0,
+                         cell_y, cell_x] = rel_x
+            yolo_targets[batch_idx, best_anchor, 1,
+                         cell_y, cell_x] = rel_y
+
+            yolo_targets[batch_idx, best_anchor, 2, cell_y, cell_x] = torch.log(
+                rel_w / anchor_w + 1e-6)
+            yolo_targets[batch_idx, best_anchor, 3, cell_y, cell_x] = torch.log(
+                rel_h / anchor_h + 1e-6)
             yolo_targets[batch_idx, best_anchor, 4, cell_y, cell_x] = 1.0
 
             class_idx = 5 + label
@@ -140,7 +142,7 @@ def decode_yolo_predictions(predictions, anchors, grid_size=14, image_size=224, 
     return results
 
 
-def yolo_loss(predictions, targets, coord_weight=3.0, noobj_weight=0.5):
+def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
     batch_size = predictions.shape[0]
     device = predictions.device
 
@@ -159,7 +161,7 @@ def yolo_loss(predictions, targets, coord_weight=3.0, noobj_weight=0.5):
     obj_mask_expanded = obj_mask.expand_as(pred_xy)
 
     if obj_mask.sum() > 0:
-        xy_loss = F.mse_loss(
+        xy_loss = F.binary_cross_entropy_with_logits(
             pred_xy[obj_mask_expanded],
             target_xy[obj_mask_expanded],
             reduction='sum'
@@ -211,3 +213,29 @@ def yolo_loss(predictions, targets, coord_weight=3.0, noobj_weight=0.5):
         'noobj_loss': noobj_loss / batch_size,
         'cls_loss': cls_loss / batch_size
     }
+
+
+def remove_bg(img, bboxes):
+    if type(img) == str:
+        original = Image.open(img).convert("RGBA")
+    else:
+        original = Image.fromarray(img).convert("RGBA")
+
+    original_with_boxes = original.copy()
+    draw = ImageDraw.Draw(original_with_boxes)
+
+    mask = Image.new("L", original.size, 255)
+    for bbox in bboxes:
+        x1, y1, w, h = bbox
+        x2, y2 = x1 + w, y1 + h
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        mask.paste(0, (x1, y1, x2, y2))
+        draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
+
+    white_bg = Image.new("RGBA", original.size, (255, 255, 255, 255))
+    result = Image.composite(white_bg, original, mask)
+
+    final_result = Image.new("RGB", result.size, (255, 255, 255))
+    final_result.paste(result, (0, 0), result)
+
+    return original_with_boxes, final_result
