@@ -3,6 +3,21 @@ import torch.nn.functional as F
 from PIL import Image, ImageDraw
 
 
+def focal_loss(inputs, targets, alpha=0.25, gamma=2.0, reduction='sum'):
+    bce_loss = F.binary_cross_entropy_with_logits(
+        inputs, targets, reduction='none')
+    pt = torch.exp(-bce_loss)
+    focal_weight = alpha * (1 - pt) ** gamma
+    focal_loss = focal_weight * bce_loss
+
+    if reduction == 'sum':
+        return focal_loss.sum()
+    elif reduction == 'mean':
+        return focal_loss.mean()
+    else:
+        return focal_loss
+
+
 def create_yolo_targets(targets, anchors, grid_size=14, image_size=224, num_classes=2):
     batch_size = len(targets)
     num_anchors = len(anchors)
@@ -157,7 +172,6 @@ def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
     target_cls = targets[:, :, 5:]
 
     obj_mask = target_obj > 0
-    noobj_mask = ~obj_mask
     obj_mask_expanded = obj_mask.expand_as(pred_xy)
 
     if obj_mask.sum() > 0:
@@ -176,17 +190,13 @@ def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
         xy_loss = torch.tensor(0.0, device=device)
         wh_loss = torch.tensor(0.0, device=device)
 
-    obj_loss = F.binary_cross_entropy_with_logits(
-        pred_obj[obj_mask],
-        target_obj[obj_mask],
+    objectness_loss = focal_loss(
+        pred_obj.reshape(-1),
+        target_obj.reshape(-1),
+        alpha=0.25,
+        gamma=2.0,
         reduction='sum'
-    ) if obj_mask.sum() > 0 else torch.tensor(0.0, device=device)
-
-    noobj_loss = F.binary_cross_entropy_with_logits(
-        pred_obj[noobj_mask],
-        target_obj[noobj_mask],
-        reduction='sum'
-    ) if noobj_mask.sum() > 0 else torch.tensor(0.0, device=device)
+    )
 
     if obj_mask.sum() > 0:
         obj_mask_cls = obj_mask.expand_as(pred_cls)
@@ -200,8 +210,7 @@ def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
 
     total_loss = (
         coord_weight * (xy_loss + wh_loss) +
-        obj_loss +
-        noobj_weight * noobj_loss +
+        objectness_loss +
         cls_loss
     ) / batch_size
 
@@ -209,8 +218,7 @@ def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
         'total_loss': total_loss,
         'xy_loss': xy_loss / batch_size,
         'wh_loss': wh_loss / batch_size,
-        'obj_loss': obj_loss / batch_size,
-        'noobj_loss': noobj_loss / batch_size,
+        'obj_loss': objectness_loss / batch_size,
         'cls_loss': cls_loss / batch_size
     }
 
