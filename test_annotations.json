@@ -1,0 +1,26 @@
+[
+  {
+    "bboxes": [
+      [265.7, 34.8, 474.2, 295.1],
+      [165.6, 86.6, 298.8, 303.4]
+    ],
+    "filename": "random.jpg",
+    "height": 360,
+    "image_id": 1,
+    "labels": [0, 1],
+    "split": "test",
+    "width": 713
+  },
+  {
+    "bboxes": [
+      [531.2, 54.9, 1048.9, 1004.0],
+      [154.7, 281.6, 554.8, 1009.6]
+    ],
+    "filename": "cat_and_dog.jpg",
+    "height": 1080,
+    "image_id": 2,
+    "labels": [0, 1],
+    "split": "test",
+    "width": 1230
+  }
+]
