@@ -161,7 +161,7 @@ def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
     batch_size = predictions.shape[0]
     device = predictions.device
 
-    pred_xy = predictions[:, :, 0:2]
+    pred_xy = torch.sigmoid(predictions[:, :, 0:2])
     pred_wh = predictions[:, :, 2:4]
     pred_obj = predictions[:, :, 4:5]
     pred_cls = predictions[:, :, 5:]
@@ -175,7 +175,7 @@ def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
     obj_mask_expanded = obj_mask.expand_as(pred_xy)
 
     if obj_mask.sum() > 0:
-        xy_loss = F.binary_cross_entropy_with_logits(
+        xy_loss = F.mse_loss(
             pred_xy[obj_mask_expanded],
             target_xy[obj_mask_expanded],
             reduction='sum'
