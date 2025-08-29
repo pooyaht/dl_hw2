@@ -157,6 +157,60 @@ def decode_yolo_predictions(predictions, anchors, grid_size=14, image_size=224, 
     return results
 
 
+def nms(boxes: torch.Tensor, scores: torch.Tensor, labels: torch.Tensor, thresh_iou: float):
+    boxes_list = boxes.tolist()
+    scores_list = scores.tolist()
+    labels_list = labels.tolist()
+
+    all_info = list(zip(boxes_list, scores_list, labels_list))
+    all_info_sorted = sorted(all_info, key=lambda item: item[1], reverse=True)
+
+    result = []
+    while len(all_info_sorted) > 0:
+        current_item = all_info_sorted[0]
+        result.append(current_item)
+        all_info_sorted.pop(0)
+
+        x1_a, y1_a, x2_a, y2_a = current_item[0]
+        area_1 = (x2_a - x1_a) * (y2_a - y1_a)
+        current_label = current_item[-1]
+
+        to_remove = []
+        for info in all_info_sorted:
+            info_label = info[-1]
+            if info_label != current_label:
+                continue
+
+            x1_b, y1_b, x2_b, y2_b = info[0]
+            area_2 = (x2_b - x1_b) * (y2_b - y1_b)
+
+            x1_ab = max(x1_a, x1_b)
+            y1_ab = max(y1_a, y1_b)
+            x2_ab = min(x2_a, x2_b)
+            y2_ab = min(y2_a, y2_b)
+
+            intersection_area = max(0, x2_ab - x1_ab) * max(0, y2_ab - y1_ab)
+            iou = intersection_area / (area_1 + area_2 - intersection_area)
+            if iou > thresh_iou:
+                to_remove.append(info)
+
+        for info in to_remove:
+            all_info_sorted.remove(info)
+
+    if not result:
+        return {'boxes': [], 'scores': [], 'labels': []}
+
+    kept_boxes = [item[0] for item in result]
+    kept_scores = [item[1] for item in result]
+    kept_labels = [item[2] for item in result]
+
+    return {
+        'boxes': kept_boxes,
+        'scores': kept_scores,
+        'labels': kept_labels
+    }
+
+
 def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
     batch_size = predictions.shape[0]
     device = predictions.device
