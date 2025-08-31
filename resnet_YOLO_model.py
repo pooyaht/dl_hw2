@@ -4,7 +4,7 @@ import numpy as np
 
 
 class SimpleResNetYOLO(nn.Module):
-    def __init__(self, anchor_boxes, grid_size=14, unfreeze_partial_epoch=10, unfreeze_all_epoch=20, dropout_rate=0.2):
+    def __init__(self, anchor_boxes, target_size, grid_size, unfreeze_partial_epoch=10, unfreeze_all_epoch=20, dropout_rate=0.2):
         super().__init__()
 
         self.num_classes = 2
@@ -19,20 +19,29 @@ class SimpleResNetYOLO(nn.Module):
 
         self.backbone = nn.Sequential(*list(resnet50.children())[:-2])
 
-        if grid_size not in [7, 14]:
-            raise ValueError("grid_size must be 7 or 14")
+        if target_size == 224:
+            if grid_size not in [7, 14]:
+                raise ValueError(
+                    "grid_size must be 7 or 14 with target_size 224")
+        elif target_size == 448:
+            if grid_size not in [14, 28]:
+                raise ValueError(
+                    "grid_size must be 14 or 28 with target_size 448")
+        else:
+            raise ValueError(
+                "target size must be 224 or 448")
 
-        # if grid_size == 14:
-        #     layer4 = self.backbone[-1]
-        #     for block in layer4:
-        #         if hasattr(block, 'conv2'):
-        #             if block.conv2.stride == (2, 2):
-        #                 block.conv2.stride = (1, 1)
-        #                 block.conv2.dilation = (2, 2)
-        #                 block.conv2.padding = (2, 2)
-        #         if hasattr(block, 'downsample') and block.downsample is not None:
-        #             if block.downsample[0].stride == (2, 2):
-        #                 block.downsample[0].stride = (1, 1)
+        if (grid_size == 14 and target_size == 224) or (grid_size == 28 and target_size == 448):
+            layer4 = self.backbone[-1]
+            for block in layer4:
+                if hasattr(block, 'conv2'):
+                    if block.conv2.stride == (2, 2):
+                        block.conv2.stride = (1, 1)
+                        block.conv2.dilation = (2, 2)
+                        block.conv2.padding = (2, 2)
+                if hasattr(block, 'downsample') and block.downsample is not None:
+                    if block.downsample[0].stride == (2, 2):
+                        block.downsample[0].stride = (1, 1)
 
         backbone_channels = 2048
 
