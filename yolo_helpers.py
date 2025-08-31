@@ -1,21 +1,44 @@
 import torch
+import numpy as np
 import torch.nn.functional as F
 from PIL import Image, ImageDraw
+from sklearn.cluster import KMeans
 
 
-def focal_loss(inputs, targets, alpha=0.25, gamma=2.0, reduction='sum'):
-    bce_loss = F.binary_cross_entropy_with_logits(
-        inputs, targets, reduction='none')
-    pt = torch.exp(-bce_loss)
-    focal_weight = alpha * (1 - pt) ** gamma
-    focal_loss = focal_weight * bce_loss
+def calculate_anchors(train_loader, num_anchors, grid_size, image_size, ratio=16/9):
+    all_boxes = []
 
-    if reduction == 'sum':
-        return focal_loss.sum()
-    elif reduction == 'mean':
-        return focal_loss.mean()
-    else:
-        return focal_loss
+    for _, targets in train_loader:
+        for target in targets:
+            for box in target['boxes']:
+                w = (box[2] - box[0]) * grid_size / image_size
+                h = (box[3] - box[1]) * grid_size / image_size
+                all_boxes.append([w.item(), h.item()])
+
+    kmeans = KMeans(n_clusters=num_anchors, random_state=42)
+    kmeans.fit(all_boxes)
+
+    anchors = kmeans.cluster_centers_
+    anchors = np.sort(anchors, axis=0)
+
+    w, h = anchors[-2]
+    area = w * h
+
+    w_horizontal = np.sqrt(area * ratio)
+    h_horizontal = np.sqrt(area * 1/ratio)
+
+    w_vertical = np.sqrt(area * 1/ratio)
+    h_vertical = np.sqrt(area * ratio)
+
+    extended_anchors = np.vstack([
+        anchors,
+        [[w_horizontal, h_horizontal]],
+        [[w_vertical, h_vertical]]
+    ])
+
+    extended_anchors = extended_anchors[np.argsort(
+        extended_anchors[:, 0] * extended_anchors[:, 1])]
+    return extended_anchors.astype(np.float32)
 
 
 def create_yolo_targets(targets, anchors, grid_size=14, image_size=224, num_classes=2):
@@ -211,6 +234,47 @@ def nms(boxes: torch.Tensor, scores: torch.Tensor, labels: torch.Tensor, thresh_
     }
 
 
+def remove_bg(img, bboxes):
+    if type(img) == str:
+        original = Image.open(img).convert("RGBA")
+    else:
+        original = Image.fromarray(img).convert("RGBA")
+
+    original_with_boxes = original.copy()
+    draw = ImageDraw.Draw(original_with_boxes)
+
+    mask = Image.new("L", original.size, 255)
+    for bbox in bboxes:
+        x1, y1, w, h = bbox
+        x2, y2 = x1 + w, y1 + h
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        mask.paste(0, (x1, y1, x2, y2))
+        draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
+
+    white_bg = Image.new("RGBA", original.size, (255, 255, 255, 255))
+    result = Image.composite(white_bg, original, mask)
+
+    final_result = Image.new("RGB", result.size, (255, 255, 255))
+    final_result.paste(result, (0, 0), result)
+
+    return original_with_boxes, final_result
+
+
+def focal_loss(inputs, targets, alpha=0.25, gamma=2.0, reduction='sum'):
+    bce_loss = F.binary_cross_entropy_with_logits(
+        inputs, targets, reduction='none')
+    pt = torch.exp(-bce_loss)
+    focal_weight = alpha * (1 - pt) ** gamma
+    focal_loss = focal_weight * bce_loss
+
+    if reduction == 'sum':
+        return focal_loss.sum()
+    elif reduction == 'mean':
+        return focal_loss.mean()
+    else:
+        return focal_loss
+
+
 def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
     batch_size = predictions.shape[0]
     device = predictions.device
@@ -275,29 +339,3 @@ def yolo_loss(predictions, targets, coord_weight=5.0, noobj_weight=0.5):
         'obj_loss': objectness_loss / batch_size,
         'cls_loss': cls_loss / batch_size
     }
-
-
-def remove_bg(img, bboxes):
-    if type(img) == str:
-        original = Image.open(img).convert("RGBA")
-    else:
-        original = Image.fromarray(img).convert("RGBA")
-
-    original_with_boxes = original.copy()
-    draw = ImageDraw.Draw(original_with_boxes)
-
-    mask = Image.new("L", original.size, 255)
-    for bbox in bboxes:
-        x1, y1, w, h = bbox
-        x2, y2 = x1 + w, y1 + h
-        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-        mask.paste(0, (x1, y1, x2, y2))
-        draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
-
-    white_bg = Image.new("RGBA", original.size, (255, 255, 255, 255))
-    result = Image.composite(white_bg, original, mask)
-
-    final_result = Image.new("RGB", result.size, (255, 255, 255))
-    final_result.paste(result, (0, 0), result)
-
-    return original_with_boxes, final_result
