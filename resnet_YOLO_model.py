@@ -175,6 +175,26 @@ class SimpleResNetYOLO(nn.Module):
             'unfreeze_all_epoch': self.unfreeze_all_epoch
         }
 
+    @staticmethod
+    def load(path, conifg, device):
+        dummy_anchors = torch.ones(conifg['num_anchors'], 2)
+        model = SimpleResNetYOLO(
+            dummy_anchors,
+            conifg['target_size'][0],
+            grid_size=conifg['grid_size']
+        ).to(device)
+
+        checkpoint = torch.load(path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model.eval()
+
+        print(f"Loaded model from {path}")
+        print(f"Model was trained for {checkpoint['epoch']} epochs")
+        print(f"Best validation loss: {checkpoint['loss']:.4f}")
+        print(f"Loaded anchors from model: {model.anchors}")
+
+        return model
+
     def print_model_info(self):
         info = self.get_model_info()
         print(f"\n{'='*50}")
