@@ -218,6 +218,7 @@ Anchor box های نهایی محاسبه شده:
     [Dropout Rate], [۰.۴],
     [Weight Decay], [۱e-۳],
     [Coord Weight], [۱.۰],
+    [num_anchors], [۳],
     [Augmentation Strength], [۰.۵],
     [Background Removal Probability], [۰.۵]
   ),
@@ -252,8 +253,8 @@ total_loss = coord_weight * (xy_loss + wh_loss) + objectness_loss + cls_loss
   table(
     columns: 3,
     [جنبه], [مدل سفارشی], [YOLOv11L],
-    [دقت تشخیص], [متوسط], [بالا],
-    [سرعت inference], [متوسط], [سریع],
+    [دقت تشخیص], [پایین], [بالا],
+    [سرعت inference], [سریع], [سریع],
     [تعداد پارامترها], [~۲۶M], [~۵۹M],
     [اندازه مدل], [کوچک], [بزرگ],
     [قابلیت تنظیم], [بالا], [پایین]
@@ -285,7 +286,7 @@ total_loss = coord_weight * (xy_loss + wh_loss) + objectness_loss + cls_loss
 مدل سفارشی با وجود پیاده‌سازی مناسب، محدودیت‌هایی نسبت به مدل‌های پیشرفته‌تر دارد:
 
 #my_heading("محدودیت‌های فعلی", level: 3)
-+ *تعداد anchor box محدود*: استفاده از ۵ anchor box که ممکن است برای اشکال متنوع کافی نباشد
++ *تعداد anchor box محدود*: استفاده از ۳ anchor box که ممکن است برای اشکال متنوع کافی نباشد
 + *معماری ساده*: نبود feature pyramid یا multi-scale detection
 + *تعداد کلاس محدود*: فقط دو کلاس سگ و گربه
 + *عدم استفاده از تکنیک‌های پیشرفته*: مانند attention mechanisms یا transformer blocks
@@ -311,11 +312,30 @@ total_loss = coord_weight * (xy_loss + wh_loss) + objectness_loss + cls_loss
         inset: 20pt,
     )[
         #par(justify: false)[
-            #text(size: 16pt, weight: "bold")[لینک مخزن گیتهاب]
+            #text(size: 16pt, weight: "bold")[لینک نوت‌بوک مدل سفارشی در Colab ]
         ]
         #v(10pt)
-        #link("https://github.com/pooyaht/dl_hw2/")[
-          Link
+        #link("https://colab.research.google.com/github/pooyaht/dl_hw2/blob/main/resnet_YOLO_train.ipynb")[
+            #image("./colab-badge.svg")
+        ]
+    ]
+]
+
+#align(center)[
+    #box(
+        width: 80%,
+        height: auto,
+        fill: rgb(240, 240, 255),
+        radius: 5pt,
+        stroke: 2pt + rgb(100, 100, 255),
+        inset: 20pt,
+    )[
+        #par(justify: false)[
+            #text(size: 16pt, weight: "bold")[لینک ریپازیتوری github]
+        ]
+        #v(10pt)
+        #link("https://www.github.com/pooyaht/dl_hw2")[
+            لینک
         ]
     ]
 ]
