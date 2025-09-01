@@ -6,6 +6,9 @@ from sklearn.cluster import KMeans
 
 
 def calculate_anchors(train_loader, num_anchors, grid_size, image_size, ratio=16/9):
+    if num_anchors < 3:
+        raise ValueError('Number of anchors cannot be smaller than 3')
+
     all_boxes = []
 
     for _, targets in train_loader:
